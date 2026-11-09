@@ -1,0 +1,293 @@
+<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le badge d’Adrien</title>
+<style>[hidden]{display:none!important}
+*{box-sizing:border-box}body{margin:0;background:#101626;color:#ecf0ff;font:16px system-ui}main{max-width:1100px;margin:auto;padding:18px}small{letter-spacing:.18em;color:#a7bafb;font-weight:bold}h1{margin:5px 0 12px;font:900 clamp(24px,5vw,40px) monospace}.card{background:#202c49;padding:12px 16px;border-left:4px solid #9bbaff;margin:10px 0}p{margin:5px 0}canvas{width:100%;height:auto;background:#000;display:block;border:3px solid #4e638e;cursor:pointer}.row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}button{font:700 15px system-ui;background:#c5d5ff;color:#172542;border:0;border-bottom:3px solid #748cc6;padding:10px 13px;cursor:pointer}button:disabled{opacity:.45}button:focus-visible{outline:3px solid white;outline-offset:2px}.ar button{min-width:48px}#msg{min-height:2em;color:#d7e2ff}.muted{color:#bac7e2;font-size:14px}
+</style>
+<main><small>MISSION TUTEUR</small><h1>Le badge d’Adrien</h1>
+<div class="card"><strong id="title">Défi 02 · Premiers repères</strong><p id="brief">Tu incarnes Adrien Natout. Tu pars de la salle de pause. Observe le plan pendant dix secondes, puis retrouve tes interlocuteurs.</p></div>
+<div style="position:relative"><canvas id="map" width="1100" height="640" aria-label="Plan des locaux et position d’Adrien"></canvas><div id="dialog" class="card" role="dialog" aria-labelledby="speaker" hidden style="margin:8px 0;border:4px double #243459;background:#eff1ff;color:#18213a;box-shadow:4px 4px #111827;font-family:monospace"><strong id="speaker"></strong><p id="speech"></p><div id="choices" class="row"></div></div></div>
+<div class="row" id="profile"><label>Prénom ou pseudo <input id="alias" maxlength="40"></label><label>Avatar de fin <select id="role"><option value="tuteur">Garçon</option><option value="tutrice">Fille</option></select></label></div><div class="row"><button id="start" disabled>Valider le profil</button><button id="hint" hidden>Relire les indications</button><button id="act" hidden></button><button id="reset" hidden>Recommencer</button></div>
+<div class="row ar"><button data-dir="up" aria-label="Monter">↑</button><button data-dir="left" aria-label="Aller à gauche">←</button><button data-dir="down" aria-label="Descendre">↓</button><button data-dir="right" aria-label="Aller à droite">→</button></div>
+<p id="msg" role="status"></p><p class="muted">Déplace-toi avec les flèches du clavier, les boutons à l’écran ou en cliquant près d’Adrien. Seules les cases autour d’Adrien sont visibles. Aucun détour ne te pénalise.</p><dialog id="success" aria-labelledby="success-title" style="max-width:440px;border:4px double #405e91;background:#edf2ff;color:#172542;padding:24px;box-shadow:6px 6px #182744"><h2 id="success-title">Félicitations !</h2><p>Tu viens de récupérer ton badge d’accès et les documents administratifs.</p><p><strong>Grâce à cette mission, Adrien a obtenu +1 en autonomie !</strong></p><form method="dialog"><button autofocus>Fermer</button></form></dialog></main>
+<script>
+const $=id=>document.getElementById(id), cv=$('map'), c=cv.getContext('2d');
+const W=55,H=32,T=20;
+const grid=Array.from({length:H},()=>Array(W).fill('g'));
+function fill(x,y,w,h,k){for(let j=y;j<y+h;j++)for(let i=x;i<x+w;i++)grid[j][i]=k}
+const rooms=[
+ [2,9,8,7,'DIRECTION','f'],[10,9,22,7,'COMMERCIAL / COMPTA','f'],[32,9,7,7,'ACHATS','f'],
+ [2,18,5,7,'WC F','f'],[7,18,5,7,'WC H','f'],[12,18,8,7,'ACCUEIL','f'],[20,18,8,7,'PAUSE','p'],
+ [28,18,6,7,'RÉUNION','f'],[34,18,5,7,'RH','f'],[41,9,13,16,'ENTREPÔT','f']];
+rooms.forEach(([x,y,w,h,n,k])=>{fill(x,y,w,h,'#');fill(x+1,y+1,w-2,h-2,k)});
+fill(2,16,38,2,'c');fill(2,16,1,2,'#');fill(39,16,1,2,'c');
+for(const x of [6,15,24,35])grid[15][x]='c';
+for(const x of [4,9,15,23,30,36])grid[18][x]='c';
+fill(15,24,1,3,'c');fill(39,8,2,20,'c');fill(1,26,53,5,'c');fill(2,3,28,5,'a');
+fill(32,3,7,5,'#');fill(33,4,5,3,'p');grid[7][35]='c';fill(30,8,11,1,'c');
+grid[16][41]='c';grid[17][41]='c';
+for(const x of [4,9,14,19,24])fill(x,4,2,3,'v');
+for(const x of [43,47,51])fill(x,11,1,11,'s');
+for(const [x,y,w,h] of [[4,11,3,2],[12,11,4,2],[19,11,4,2],[26,11,4,2],[34,11,3,2],[4,21,2,2],[9,21,2,2],[13,20,2,2],[23,21,2,2],[22,23,4,1],[30,20,2,3],[36,21,2,1]])fill(x,y,w,h,'t');
+fill(0,0,W,1,'#');fill(0,31,W,1,'#');fill(0,0,1,H,'#');fill(54,0,1,H,'#');
+const node=(x,y)=>y*W+x, xy=i=>[i%W,Math.floor(i/W)], point=i=>{const [x,y]=xy(i);return {x:x*T+10,y:y*T+10}};
+const origin=node(22,20),rh=node(36,20),desk=node(15,20),gate=node(15,23),door=node(15,24),bike=node(35,7);
+const delta={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
+fill(47,18,6,5,'#');fill(48,19,4,3,'f');grid[20][47]='f';grid[18][49]='f';for(let y=11;y<=21;y++)grid[y][43]='f';fill(50,19,2,1,'t');
+grid[16][41]='#';grid[17][41]='c';grid[24][42]='#';
+fill(44,25,3,4,'v');grid[25][48]='t';grid[23][21]='t';grid[19][26]='t';grid[19][21]='t';grid[14][11]='t';grid[23][37]='t';
+// Three permanent rack rows, with cross-aisles between their sections.
+for(const x of [43,45])for(const y of [10,11,16,17,23])grid[y][x]='s';
+const gaetan=node(51,20);
+let machines=[],pool=[],unused=[],lastGap=null,lastEntrance=null,returnRearranged=false;
+function buildLayouts(){
+ const kinds=['palette','gerbeur','transpalette','cartons'];
+ const layouts=[];
+ for(let first=11;first<=22;first++){
+  for(let second=11;second<=22;second++){
+   if(Math.abs(first-second)<6||grid[first][43]==='s'||grid[second][45]==='s')continue;
+   for(const entrance of ['north','side']){
+   const gap=second, props=[];
+   for(const [column,opening] of [[43,first],[45,second]]){
+    for(let y=10;y<=23;y++)if(y!==opening&&grid[y][column]!=='s')props.push([column,y,kinds[(y+column+first+second)%4]]);
+   }
+   props.push(entrance==='north'?[47,20,'palette']:[49,18,'cartons']);
+   for(const [x,y] of [[48,12],[50,13],[52,14],[52,16],[49,15],[44,Math.abs(first-10)<Math.abs(first-23)?23:10]])
+    props.push([x,y,kinds[(x+y+first)%4]]);
+   const occupied=new Set(props.map(([x,y])=>node(x,y))),seen=new Set([node(41,17)]);
+   for(const i of seen){const [x,y]=xy(i);for(const [dx,dy] of Object.values(delta)){
+    const u=x+dx,v=y+dy,k=grid[v]?.[u],n=node(u,v);
+    if(u>=41&&u<=53&&v>=9&&v<=24&&k&&!'#tsv'.includes(k)&&!occupied.has(n))seen.add(n);
+   }}
+   if(seen.has(node(50,20)))layouts.push({gap,entrance,props});
+   }
+  }
+ }
+ return layouts;
+}
+function rearrange(){
+ const candidates=unused.filter(l=>l.gap!==lastGap&&l.entrance!==lastEntrance);
+ const choices=candidates.length?candidates:unused;
+ if(!choices.length)return;
+ const pick=choices[Math.floor(Math.random()*choices.length)];
+ unused.splice(unused.indexOf(pick),1);lastGap=pick.gap;lastEntrance=pick.entrance;machines=pick.props;
+}
+const blocked=(x,y)=>machines.some(([a,b])=>x===a&&y===b);
+for(const [x,y] of [[22,21],[25,21],[24,19],[25,19]])grid[y][x]='t';
+grid[22][23]='p';grid[22][24]='p';
+fill(45,2,7,2,'v');fill(45,5,4,1,'v');grid[5][50]='t';
+
+const wh=node(40,17), boss=node(50,20), green=node(36,5), badge=node(36,21), parcel=node(50,19);
+const tasks=[
+ ['01 · Le badge','Rejoins Nicolas aux ressources humaines.',badge,'Prendre le badge','Sors de la salle de pause et longe la salle de réunion vers la droite.'],
+ ['02 · Les accès','Rejoins l’entrée principale.',gate,'','Le portique se trouve entre le comptoir et l’entrée principale.'],
+ ['02 · Les accès','Teste ensuite le lecteur de la porte d’entrée.',door,'Ouvrir la porte','Avance vers l’entrée principale, en bas du plan.'],
+ ['03 · Le colis','Teste ton badge à l’entrée de l’entrepôt.',wh,'Badger à l’entrepôt','Depuis l’entrée, longe la façade vers la droite. Remonte le passage entre les bâtiments : la porte piétonne est sur le côté de l’entrepôt.'],
+ ['03 · Le colis','Trouve le bureau de Gaëtan Mouche, chef logistique, et remets-lui le colis.',parcel,'Déposer le colis sur la table','Le bureau de Gaëtan a deux accès. Si la porte latérale est encombrée, cherche l’entrée au nord.'],
+ ['04 · Le vélo vert','Approche-toi du vélo vert fluo et clique dessus pour éteindre son phare.',green,'Éteindre la lumière','Le garage est derrière le bâtiment, à côté du parking. Le vélo vert est celui dont le phare est allumé.'],
+ ['05 · Le retour','Retourne au bureau de Gaëtan.',boss,'','Reprends le passage extérieur jusqu’à l’entrepôt.'],
+ ['06 · Le rendez-vous','Rejoins ton tuteur ou ta tutrice à l’accueil.',door,'','Présente ton badge au lecteur extérieur de l’accueil, puis entre.']
+];
+const params=new URLSearchParams(location.search);
+let whOpen=false,bikeOpen=false, doorOpen=false, rhSpoke=false, warned=false;
+const name=()=>$('alias').value.trim()||'Camille';
+const near=(a,b)=>{const [x,y]=xy(a),[u,v]=xy(b);return Math.abs(x-u)+Math.abs(y-v)<=1};
+let given='Adrien',actor=null,alertAt=null,full=false,locked=false,run=0;
+function talk(who,line,options){
+ locked=true;$('speaker').textContent=who;$('speech').textContent=line;$('choices').replaceChildren();
+ for(const [label,fn] of options){const b=document.createElement('button');b.textContent=label;b.onclick=()=>{$('dialog').hidden=true;locked=false;fn();ui()};$('choices').append(b)}
+ $('dialog').hidden=false;ui();$('choices').firstElementChild.focus();
+}
+const next=()=>{step++;msg('')};
+function cinematic(from,to,color,cb){
+ locked=true;const token=run;
+ const q=[[from,[]]],seen=new Set([from]);let route=[];
+ for(let k=0;k<q.length;k++){const [i,path]=q[k];if(i===to){route=path;break}const [x,y]=xy(i);for(const [dx,dy] of Object.values(delta)){const n=node(x+dx,y+dy),v=grid[y+dy]?.[x+dx];if(v&&! '#tsv'.includes(v)&&!seen.has(n)){seen.add(n);q.push([n,[...path,n]])}}}
+ let i=0,cur=point(from),at=performance.now();actor={...cur,color,stride:0};ui();
+ function frame(now){if(token!==run)return;if(i>=route.length){actor={...cur,color,stride:0};locked=false;cb();return}const dest=point(route[i]),f=Math.min(1,(now-at)/70);actor={x:cur.x+(dest.x-cur.x)*f,y:cur.y+(dest.y-cur.y)*f,color,stride:(i%2?1:-1)*(f<.5?1:-1)};draw();if(f===1){cur=dest;i++;at=now}requestAnimationFrame(frame)}
+ requestAnimationFrame(frame)
+}
+function arrived(){
+ if(step===0&&!rhSpoke&&near(pos,badge)){
+ locked=true;alertAt=node(37,20);ui();const token=run;
+ setTimeout(()=>{if(token!==run)return;alertAt=null;talk('Nicolas Schlater','Adrien, ton badge et tes documents administratifs sont sur la table. Récupère-les, puis essaie d’ouvrir la porte de l’accueil avec.',[['Continuer',()=>{rhSpoke=true}]])},650);
+ }
+ if(step===6&&pos===boss){
+ talk('Gaëtan · au téléphone',given==='Martin'?'Allô ? Adrien ?… Ah oui ! Il m’a dit qu’il s’appelait Martin… D’accord, je lui dis de te rejoindre à l’accueil.':'Allô ? Oui, Adrien est avec moi… D’accord, je lui dis de te rejoindre à l’accueil.',[['Continuer',()=>{rearrange();next();msg('Le passage a de nouveau changé.')}] ]);
+ }
+ if(step===7&&pos===door){
+ full=true;cinematic(rh,node(15,23),$('role').value==='tutrice'?'#ad517c':'#385ca5',()=>{
+ talk(name(),'Ah, tu es là, Adrien ! Tu as déjà fait le tour des locaux sans moi ? Thierry et Gaëtan m’ont dit qu’ils t’avaient demandé un coup de main. Tu as pris l’initiative de les aider. Si on te sollicite alors que tu as déjà quelque chose de prévu, tu peux le dire. Viens, on va faire la visite ensemble, je vais te montrer du monde.',[['Terminer le défi',()=>{phase='done';$('title').textContent='Défi terminé · Premiers repères';$('brief').textContent='Viens, on va faire la visite ensemble, je vais te montrer du monde.';$('success').showModal()}]])
+ });
+ }
+}
+let pos=origin,phase='intro',step=0,shown=new Set(),clock,face=1;
+function reveal(){shown.clear();let [x,y]=xy(pos);for(let j=Math.max(0,y-2);j<=Math.min(H-1,y+2);j++)for(let i=Math.max(0,x-2);i<=Math.min(W-1,x+2);i++)shown.add(node(i,j))}
+function px(x,y,w,h,color){c.fillStyle=color;c.fillRect(x,y,w,h)}
+function sprite(x,y,stride=0,dir='down',color='#5873bf'){
+ const art=(color==='#ad517c'?['....dddd....','...dddddd...','..ddffffdd..','..ddfdfddd..','..ddffffdd..','..dddffddd..','..ddbbbbdd..','...fbbbbf...','....bbbb....','...bbbbbb...','....d..d....','...dd..dd...']:['....dddd....','...dddddd...','..dbbbbbbd..','..dbbbbbddd.','...dffffd...','...dfdfdd...','....ffff....','...dbbbbd...','..dfbbbbfd..','...dbbbbd...','....dddd....','...dd..dd...']);
+ art.forEach((s,j)=>[...s].forEach((k,i)=>{if(k!=='.')px(x-12+(face>0?i:11-i)*2,y-22+j*2+(j>9&&stride?((i<6)=== (stride>0)?2:-2):0),2,2,{d:'#18213a',b:color,f:dir==='up'?'#5978be':'#ffe2c1'}[k])}))
+}
+function marker(i,label){let {x,y}=point(i);px(x-11,y-10,22,20,'#192744');px(x-8,y-7,16,14,'#b8ceff');c.fillStyle='#192744';c.font='bold 12px monospace';c.textAlign='center';c.fillText(label,x,y+4)}
+function draw(){
+ c.drawImage(back,0,0);px(980,364,20,4,'#9b806f');px(944,400,4,20,'#9b806f');drawMachines();
+ for(const g of readers()){const o=point(g.tile);if(g.key!=='bike')px(o.x-9,o.y-3,18,6,g.open?'#b7d4db':'#745b78');for(const i of g.sides){const p=readerMount(g,i);px(p.x-5,p.y-4,10,8,'#9aa9c2');px(p.x-4,p.y-3,8,6,'#273754');px(p.x-2,p.y-2,4,4,g.open?'#65ff8c':'#fa5665')}}
+ if(step===0)marker(badge,'ID');
+ if(step===4&&near(pos,parcel))marker(parcel,'＋');
+ if(step>=5){const p=point(parcel);box(p.x,p.y)}
+ const access=point(bike),hinge=access.x-9,threshold=access.y+4;
+ c.save();c.translate(hinge,threshold);if(bikeOpen)c.rotate(-Math.PI/2);
+ px(0,-5,18,2,'#45566b');px(0,5,18,2,'#45566b');px(0,-5,2,12,'#45566b');px(16,-5,2,12,'#45566b');
+ for(let x=3;x<16;x+=4)px(x,-3,1,8,'#61788c');
+ for(let y=-2;y<5;y+=3)px(2,y,14,1,'#61788c');
+ px(13,0,3,2,'#bec9d4');c.restore();
+ px(hinge-1,threshold-2,3,5,'#35455a');
+ for(const [i,color] of [[node(37,20),'#795685'],[node(51,20),'#9c7156']]){const p=point(i);sprite(p.x,p.y+5,0,'down',color)}
+ if(step<=5){const g=point(green);c.fillStyle='#fff5a085';c.beginPath();c.moveTo(g.x,g.y-14);c.lineTo(g.x-24,62);c.lineTo(g.x+35,62);c.closePath();c.fill();px(g.x-18,63,48,4,'#fff4aa')}
+ for(const [x,col] of [[33,'#eb718f'],[34,'#63adf0'],[36,'#74ff41'],[37,'#d78bff']])cycle(x*T+10,108,col);
+ if(actor)sprite(actor.x,actor.y+6,actor.stride,'down',actor.color);
+ if((phase==='play'&&!full)||phase==='intro'){
+ c.beginPath();c.rect(0,0,1100,640);shown.forEach(k=>{const [i,j]=xy(k);c.rect(i*T,j*T,T,T)});c.fillStyle='#000';c.fill('evenodd');
+ }
+ let p=point(pos),stride=0;if(anim){const f=Math.min(1,(performance.now()-anim.at)/115);p={x:anim.from.x+(p.x-anim.from.x)*f,y:anim.from.y+(p.y-anim.from.y)*f};stride=f<.5?anim.foot:-anim.foot}sprite(p.x,p.y+6,stride,facing);if(step===3||step===4)box(p.x+(facing==='left'?-8:facing==='right'?8:0),p.y+1);if(alertAt!==null){const a=point(alertAt);px(a.x-8,a.y-39,16,17,'#fff');c.fillStyle='#a01b40';c.font='bold 15px monospace';c.textAlign='center';c.fillText('!',a.x,a.y-25)}
+}
+function ui(){
+ const t=tasks[step],playing=phase==='play'&&!locked;$('profile').hidden=phase!=='intro';
+ $('hint').hidden=!playing;$('act').hidden=!playing||!canAct();$('reset').hidden=phase==='intro'||phase==='study';
+ document.querySelectorAll('[data-dir]').forEach(b=>b.disabled=!playing);
+ if(playing){$('title').textContent='Ordre de mission '+t[0];$('brief').textContent=step===7?'Rejoins maintenant '+name()+' à l’accueil.':t[1];$('act').textContent=activeReader()?'Présenter le badge':t[3]}
+ draw()
+}
+function msg(s){$('msg').textContent=s}
+function start(){if(phase!=='intro')return;phase='study';$('start').disabled=true;let end=performance.now()+10000;function tick(){let n=Math.ceil((end-performance.now())/1000);if(n>0){$('start').textContent='Observe le plan : '+n+' s';clock=setTimeout(tick,80)}else{phase='play';$('start').hidden=true;reveal();msg('Tu es dans la salle de pause.');ui()}}tick();ui()}
+function reset(){clearTimeout(clock);run++;unused=pool.slice();lastGap=null;lastEntrance=null;returnRearranged=false;rearrange();tasks[2][1]='Présente ton badge au lecteur intérieur, puis sors.';whOpen=false;bikeOpen=false;doorOpen=false;rhSpoke=false;warned=false;given='Adrien';actor=null;alertAt=null;full=false;locked=false;$('dialog').hidden=true;anim=null;facing='down';pos=origin;step=0;phase='intro';shown=new Set();$('start').hidden=false;$('start').disabled=false;$('start').textContent='Valider le profil';$('title').textContent='Défi 02 · Premiers repères';$('brief').textContent='Tu incarnes Adrien Natout. Tu pars de la salle de pause. Observe le plan pendant dix secondes, puis retrouve tes interlocuteurs.';msg('');ui()}
+let anim=null,facing='down',foot=1;
+function move(dir){
+ if(phase!=='play'||anim||locked)return;
+ const [x,y]=xy(pos),[dx,dy]=delta[dir],nx=x+dx,ny=y+dy,target=node(nx,ny);
+ facing=dir;if(dx)face=dx;
+ if(target===node(39,16)||target===node(39,17)){msg('La porte latérale est verrouillée de l’intérieur.');return}
+ if(blocked(nx,ny)||!grid[ny]?.[nx]||'#tsv'.includes(grid[ny][nx])){msg('Un obstacle bloque le passage.');draw();return}
+ if(target===bike&&!bikeOpen){msg('Approche-toi et ouvre la porte du local à vélos.');return}
+ if(target===door&&!doorOpen){msg('Approche-toi et présente ton badge au lecteur.');return}
+ if(target===node(41,17)&&!whOpen){msg('Utilise le lecteur de badge devant la porte piétonne.');return}
+ anim={from:point(pos),at:performance.now(),foot:foot*=-1};
+ if(pos===wh&&target===node(41,17)&&step===6&&!returnRearranged){returnRearranged=true;rearrange();}
+ if(pos===door){doorOpen=false;if(step===2&&target===node(15,25))tasks[2][1]='Depuis l’extérieur, badge à nouveau pour tester la réouverture.'}
+ if(pos===bike)bikeOpen=false;if(pos===node(41,17))whOpen=false;
+ pos=target;reveal();msg(pos===tasks[step][2]?'Tu es au bon endroit. Utilise le bouton d’action.':'');ui();
+ const active=anim;function walk(){if(anim!==active)return;if(performance.now()-anim.at>=115){anim=null;arrived();draw()}else{draw();requestAnimationFrame(walk)}}requestAnimationFrame(walk);
+}
+$('start').onclick=start;$('reset').onclick=reset;$('hint').onclick=()=>msg(tasks[step][4]);
+$('alias').value=params.get('prenom')||params.get('pseudo')||'';
+if(params.get('role')==='tutrice')$('role').value='tutrice';
+function readerMount(g,side){
+ const d=point(g.tile),p=point(side);
+ return g.key==='warehouse'?{x:d.x+Math.sign(p.x-d.x)*5,y:d.y+20}:{x:d.x+20,y:d.y+Math.sign(p.y-d.y)*5};
+}
+function readers(){return [
+ {key:'main',tile:door,sides:[node(15,23),node(15,25)],open:doorOpen,allowed:step===2||step===7},
+ {key:'warehouse',tile:node(41,17),sides:[wh,node(42,17)],open:whOpen,allowed:step>=3},
+ {key:'bike',tile:bike,sides:[node(35,8),node(35,6)],open:bikeOpen,allowed:step>=5}
+]}
+function activeReader(){return readers().find(g=>g.allowed&&!g.open&&g.sides.includes(pos))}
+function canAct(){const t=tasks[step];return !!activeReader()||!!t?.[3]&&![2,3,7].includes(step)&&near(pos,t[2])&&(step!==0||rhSpoke)}
+$('act').onclick=()=>{
+ if(locked||anim||!canAct())return;
+ const reader=activeReader();
+ if(reader){
+ if(reader.key==='main'){
+ doorOpen=true;msg('Badge accepté : porte ouverte.');
+ if(step===2&&pos===node(15,25)){ cinematic(node(15,29),node(15,xy(pos)[1]+1),'#688743',()=>talk('Thierry','Hé, Adrien ! On s’est vus tout à l’heure. Je viens de chercher le courrier dehors. Tu peux déposer ce colis à l’entrepôt ? C’est une pièce de rechange pour un gerbeur. Tu pourras tester ton badge à l’entrée.',[['Prendre le colis',()=>{actor=null;doorOpen=false;next()}]]));
+ }
+ }else if(reader.key==='warehouse'){whOpen=true;if(step===3)next();msg('Badge accepté : accès à l’entrepôt ouvert.')}
+ else{bikeOpen=true;msg('Badge accepté : local à vélos ouvert.')}
+ ui();return;
+ }
+ if(step===0){step=2;msg('Badge et documents administratifs récupérés.')}
+ else if(step===4){next();
+ talk('Gaëtan Mouche','Hé, merci pour le colis ! Comment tu t’appelles ?',['Adrien','Martin'].map(n=>[n,()=>{
+ given=n;talk('Gaëtan Mouche',(n==='Martin'?'Ah, d’accord… Il me semblait qu’on m’avait parlé d’un Adrien. J’ai dû rêver ! ':'Enchanté, Adrien ! ')+'Tu peux passer au local à vélos ? Je crois que j’ai laissé le phare allumé. Mon vélo, c’est le vert fluo.',[['Aller voir le vélo',()=>{rearrange();msg('Les palettes ont été rangées et les engins déplacés. Cherche le nouveau passage.')}]]);
+ }]));
+ }else if(step===5){next();msg('Le phare du vélo est éteint.')}
+ ui();
+};
+document.querySelectorAll('[data-dir]').forEach(b=>b.onclick=()=>move(b.dataset.dir));
+document.addEventListener('keydown',e=>{if(phase==='play'&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();move(e.key.slice(5).toLowerCase())}});
+cv.onclick=e=>{if(phase!=='play'||locked)return;let r=cv.getBoundingClientRect(),p=point(pos),x=(e.clientX-r.left-3)/(r.width-6)*1100-p.x,y=(e.clientY-r.top-3)/(r.height-6)*640-p.y;const t=tasks[step];const g=point(gaetan);if(step===4&&!warned&&!anim&&near(pos,gaetan)&&Math.abs(p.x+x-g.x)<13&&p.y+y>=g.y-18&&p.y+y<=g.y+5){talk('Gaëtan Mouche','Où est mon colis ? Tu peux le déposer sur la table ?',[['D’accord',()=>{warned=true;rearrange();msg('Les obstacles ont été déplacés.')}]]);return}if(canAct()){const reader=activeReader();const o=reader?readerMount(reader,pos):point(t[2]);if(Math.abs(p.x+x-o.x)<14&&Math.abs(p.y+y-o.y)<(step===5&&bikeOpen?19:14)){$('act').click();return}}if(Math.hypot(x,y)>7)move(Math.abs(x)>Math.abs(y)?x>0?'right':'left':y>0?'down':'up')};
+const back=document.createElement('canvas');back.width=1100;back.height=640;
+const bc=back.getContext('2d');
+function b(x,y,w,h,color){bc.fillStyle=color;bc.fillRect(x,y,w,h)}
+const pal={g:'#829dc4',a:'#677ba6',c:'#bfcee9',f:'#e5def3',p:'#d5d4f2','#':'#35466d',t:'#b18da2',s:'#7974a8',v:'#8ba9df'};
+for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+ const k=grid[y][x],u=x*T,v=y*T;b(u,v,T,T,pal[k]);
+ if(k==='#'){b(u,v,T,5,'#6f85b0');b(u,v+15,T,5,'#263758')}
+ else if(k==='s'){
+  b(u,v,20,20,'#e5def3');b(u+2,v,16,20,'#3a4c6d');b(u+4,v,12,20,'#716481');
+  for(const yy of [2,11]){b(u+5,v+yy,5,6,'#cfa373');b(u+11,v+yy,4,6,'#ba875a');b(u+6,v+yy,2,5,'#ebc595')}
+  b(u+2,v+8,16,2,'#e0ab66');b(u+2,v+18,16,2,'#e0ab66');b(u+2,v,2,20,'#566d93');b(u+16,v,2,20,'#566d93');
+ }
+ else if(k==='t'){b(u+2,v+2,16,12,k==='t'?'#d5b8c4':'#9a98c7');b(u+3,v+15,14,3,'#65577c')}
+ else if(k==='v'){b(u+2,v+2,16,16,'#a5bcf0');b(u+4,v+6,12,7,'#3b527e')}
+ else if(k==='g'){for(let i=0;i<3;i++)b(u+(x*7+y*3+i*6)%17,v+(y*7+x+i*3)%16,3,2,'#9cb4d5')}
+ else{b(u,v,T,1,k==='a'?'#7489b0':'#aebbd9');b(u,v,1,T,'#b0b9d3')}
+}
+function sign(x,y,t){bc.font='bold 12px monospace';const w=bc.measureText(t).width+10;b(x,y,w,17,'#273754');bc.fillStyle='#eff1ff';bc.fillText(t,x+5,y+12)}
+function box(x,y){px(x-6,y-5,13,11,'#60412f');px(x-5,y-5,11,8,'#d4a468');px(x-5,y-5,11,2,'#f3ce9d');px(x-1,y-5,3,8,'#a97a4c')}
+function cycle(x,y,color){
+ // Vue de dessus : roue avant et guidon tournés vers le mur du fond.
+ px(x-2,y-14,4,9,'#27334f');px(x-2,y+5,4,10,'#27334f');
+ px(x-5,y-11,10,2,'#26334d');px(x-6,y-12,2,3,'#26334d');px(x+4,y-12,2,3,'#26334d');
+ px(x-1,y-9,2,16,color);px(x-3,y-5,2,8,color);px(x+1,y-4,2,7,color);px(x-3,y+3,6,3,'#33435f');
+}
+function drawMachines(){
+for(const [x,y,kind] of machines){const u=x*T,v=y*T, lift=kind==='gerbeur';
+ if(kind==='cartons'){box(u+7,v+12);box(u+13,v+8);continue}
+ if(kind==='palette'){px(u+2,v+3,16,15,'#8a6754');for(let j=0;j<3;j++)px(u+3,v+4+j*4,14,2,'#d8b080');continue}
+ px(u,v,20,20,'#e5def3');px(u+2,v+15,16,3,'#b0a9c4');
+ px(u+3,v+6,10,lift?10:7,lift?'#dfae55':'#ce7b67');
+ px(u+2,v+13,4,4,'#26354e');px(u+10,v+13,4,4,'#26354e');
+ px(u+13,v+7,3,10,'#475771');px(u+17,v+7,2,10,'#475771');
+ if(lift){px(u+11,v+2,3,12,'#344462');px(u+7,v+2,5,4,'#798dab')}else{px(u+3,v+2,2,7,'#465675');px(u+1,v+1,6,2,'#465675')}
+}
+}
+// Marquages et détails des espaces extérieurs.
+for(let x=35;x<585;x+=100){b(x,62,2,92,'#c7d3ea');b(x,153,100,2,'#aabddc')}
+for(let x=24;x<1070;x+=42)b(x,605,22,3,'#e1e8f5');
+for(let i=0;i<6;i++)b(305+i*7,535,4,27,'#edf0f7');
+for(const [x,y] of [[30,45],[170,38],[330,42],[575,36],[812,46],[1025,95],[65,499],[201,505],[605,499],[747,510],[1057,564]]){
+ b(x-3,y+6,25,17,'#708bae');b(x+7,y+14,5,11,'#736f7b');
+ b(x+2,y,17,19,'#537b77');b(x-2,y+5,25,10,'#537b77');
+ b(x+4,y+2,13,12,'#82aaa1');b(x+7,y+1,7,6,'#abc6b5');
+}
+b(764,63,8,79,'#536d97');b(658,66,106,4,'#7d98c1');
+for(let y=70;y<140;y+=8)b(767,y,2,4,'#9fb5d4');
+for(const [i,x] of [4,9,14,19,24].entries()){
+ const u=x*T+4,v=84,col=['#e3818c','#779de1','#e4bb71','#a982cd','#85ba9e'][i];
+ b(u,v+8,4,11,'#283851');b(u+28,v+8,4,11,'#283851');b(u,v+37,4,11,'#283851');b(u+28,v+37,4,11,'#283851');b(u+3,v,26,53,col);b(u+6,v+10,20,10,'#394c73');b(u+6,v+34,20,8,'#394c73');b(u+5,v+2,5,3,'#fff2a6');b(u+21,v+2,5,3,'#fff2a6');
+}
+// Livraison : caisse, cabine et ombre dessinées par couches.
+b(873,503,64,79,'#8797ba');
+for(const yy of [512,534,563]){b(878,yy,8,12,'#27334b');b(928,yy,8,12,'#27334b')}
+b(883,500,46,52,'#536686');b(885,501,42,48,'#f1f0e8');b(889,504,33,40,'#d6deeb');b(889,505,3,38,'#fbfbf5');b(886,546,40,3,'#a2acc3');
+b(886,550,40,25,'#324770');b(889,550,34,22,'#567bb4');b(893,556,26,8,'#a9d2ed');b(894,566,24,3,'#385784');b(887,571,5,3,'#fff1a6');b(920,571,5,3,'#fff1a6');b(890,575,32,3,'#243552');
+for(let j=0;j<4;j++)b(955,484+j*4,47,2,'#93a3c5');
+b(391,320,8,38,'#748bb4');b(779,320,8,38,'#748bb4');
+for(const [x,y] of [[12,11],[19,11],[26,11],[34,11],[13,20]]){b(x*20+6,y*20+4,16,9,'#34436c');b(x*20+8,y*20+5,12,6,'#a9dcf2');b(x*20+13,y*20+12,3,4,'#334468')}
+b(523,382,14,17,'#e8eef6');b(524,388,12,2,'#8ea1bd');b(532,391,2,5,'#687da0');
+for(const [x,y] of [[21,19],[21,23],[37,23],[11,14]]){b(x*20+7,y*20+10,7,8,'#9b7583');b(x*20+3,y*20+4,15,8,'#689681');b(x*20+7,y*20+1,7,10,'#88b397')}
+// Quai et abribus derrière le bâtiment.
+b(852,27,222,61,'#536b90');b(852,86,222,4,'#d2dcef');
+for(let x=860;x<1070;x+=29)b(x,33,15,2,'#b7c9e0');
+b(897,46,143,29,'#263752');b(901,42,135,29,'#81bfc3');b(908,43,113,15,'#cce2e9');
+for(let x=913;x<1018;x+=15)b(x,46,11,8,'#445c7f');
+b(1020,47,13,16,'#354868');b(905,65,126,4,'#52828e');
+for(const x of [920,1005])b(x,71,13,5,'#24334c');
+b(899,99,82,19,'#475d80');b(903,101,74,13,'#92b5d4');b(911,109,54,4,'#667c9c');b(902,117,4,9,'#344963');b(973,117,4,9,'#344963');
+b(1008,102,4,22,'#3d5579');sign(992,95,'BUS 14');
+function roundTable(x,y){b(x+7,y+12,6,6,'#655270');b(x+3,y+4,14,11,'#846685');b(x+5,y+2,10,15,'#846685');b(x+4,y+4,12,9,'#d7b8c8');b(x+6,y+3,8,11,'#d7b8c8');b(x+6,y+5,8,2,'#edd4df')}
+for(const x of [22,25]){b(x*T,420,20,20,'#d5d4f2');roundTable(x*T,420)}
+b(481,381,38,18,'#a68aa5');
+b(484,382,13,13,'#394663');b(486,384,9,4,'#788da7');b(489,390,5,4,'#eee7e1');
+b(503,384,15,10,'#e4e7ef');b(505,386,9,6,'#526480');b(515,387,2,2,'#9ba9bc');
+pool=buildLayouts();
+reset();
+</script></html>
