@@ -710,11 +710,11 @@ const visitNoteText=[
  [
   ["","J’ai vérifié le bureau d’Adrien mercredi. Séverine m’a confirmé que les accès fonctionnent (mail, CRM…). RDV prévu à {11 h}, mais elle aimerait mettre un visage sur son prénom avant. Si on peut, passer la saluer : {2 min max}."],
   ["side-ink","↳ Séverine a appelé ce matin : elle n’arrive qu’à {9 h 50}, elle dépose sa fille au lycée."],
-  ["","RH : Adrien pourra récupérer son badge et ses documents. ~~Refaire la visite du service~~ → on risque de prendre du retard."],
+  ["","RH : la remise du badge et des documents est déjà prévue. ~~Refaire la visite du service~~ → si on y passe, compter {3 min de retard}."],
   ["","Salle de réunion : appel client de {9 h 30 à 10 h 30}. ~~Entrer~~ La montrer de l’extérieur et expliquer les réservations. Compter {2 min}."],
   ["","Gaëtan a appelé à {7 h 30} : grosse livraison pour Pachard + inventaire. ~~Visiter l’entrepôt~~. Il est bloqué au dépôt et me demande de faire le brief sécurité : parking, {point de rassemblement}, etc. Prévoir {au moins 15 min en tout} pour les points sécurité."],
   ["","Riyad veut me voir lundi 7 septembre pour mon calcul de marge chez un client. Il doit faire son rapport à Séverine le matin. Avec lui, ça file : {5 min max} à son bureau."],
-  ["side-ink","~~Café avec Thierry~~ On ira le voir plus tard avec Adrien. Je le connais : avec ses anecdotes, on risque de prendre {10 min de retard} !"]
+  ["side-ink","~~Café avec Thierry~~ On ira le voir plus tard avec Adrien. Si on repasse à l’accueil, Thierry risque de nous raconter ses anecdotes : {10 min de retard} !"]
  ]
 ];
 function makeNotePaper(i){
@@ -1345,12 +1345,12 @@ const visitStops={
  finance:{label:'Riyad · service financier',short:'Finance',x:429,y:193,d:5},
  direction:{label:'Sandrine · direction',short:'Direction',x:95,y:168,d:5,until:615},
  maya:{label:'Maya · achats et question SAV',short:'Achats',x:522,y:202,d:10,from:590},
- reception:{label:'Accueil · repérer l’entrée',short:'Accueil',x:222,y:320,d:1},
+ reception:{label:'Accueil · Thierry',short:'Accueil',x:222,y:320,d:0,delay:10,delayReason:'Échange imprévu avec Thierry'},
  info:{label:'Séverine · service informatique',short:'Informatique',x:522,y:152,d:2,from:590,maxWithWalk:5},
- rh:{label:'RH · repérer le service',short:'RH',x:531,y:303,d:2},
+ rh:{label:'RH · détour',short:'RH',x:531,y:303,d:0,delay:3,delayReason:'Détour administratif'},
  wc:{label:'Sanitaires · repère extérieur',short:'Sanitaires',x:129,y:246,d:1},
  salle:{label:'Salle de réunion · depuis le couloir',short:'Salle réunion',x:445,y:282,d:2},
- parking:{label:'Parking · point de rassemblement',short:'Rassemblement',x:59,y:91,d:5},
+ parking:{label:'Parking · point de rassemblement',short:'Rassemblement',x:59,y:91,d:0,minTotal:15},
  end:{label:'Salle de pause',short:'Salle de pause',x:333,y:310,d:0}
 };
 // Waypoints are in the original plan coordinates. Links cross partitions only at doors.
@@ -1452,10 +1452,12 @@ function evaluateVisit(ids,failures=[],legs=[]){
  let t=580;const rows=[],issues=[];
  for(let i=0;i<ids.length;i++){
   const id=ids[i],stop=visitStops[id];const depart=t,travel=i?visitTravel(ids[i-1],id,legs[i-1]?.points):0;t+=travel;
-  const wait=Math.max(0,(stop.from||0)-t);t+=wait;const start=t;t+=stop.d;
+  const wait=Math.max(0,(stop.from||0)-t);t+=wait;const start=t;
+  const delay=stop.delay||0;
+  t+=Math.max(stop.d,(stop.minTotal||0)-travel)+delay;
   if(stop.until&&t>stop.until)issues.push(id==='compta'?'Adèle est avec Cynthia à 10 h : termine la compta avant ou retire cet arrêt.':'Sandrine doit être libérée à 10 h 15 pour sa réunion.');
-  rows.push({id,depart,start,end:t,wait,travel});
-  for(const f of failures.filter(x=>x.after===id)){t+=2;rows.push({id:f.id,start:t-2,end:t,failed:true,message:f.message,tooEarly:f.tooEarly})}
+  rows.push({id,depart,start,end:t,wait,travel,delay});
+  for(const f of failures.filter(x=>x.after===id)){const delay=f.delay;t+=delay;rows.push({id:f.id,start:t-delay,end:t,delay,failed:true,message:f.message,tooEarly:f.tooEarly})}
  }
  if(!ids.includes('finance'))issues.push('Arrêt obligatoire manquant : le service financier (Riyad).');
  if(!ids.includes('parking'))issues.push('Arrêt obligatoire manquant : le point de rassemblement. Adrien doit savoir où aller en cas d’évacuation.');
@@ -1605,17 +1607,17 @@ function setupPencilPot(id,desk){
   };pot.append(b);
  }
 }
-const visitStopDetails={start:'Présentation du parcours',commercial:'Présentations',compta:'Échange avec Adèle',finance:'Calcul de marge',direction:'Discussion',maya:'Échange et question SAV',info:'Présentation à Séverine',rh:'Repères RH',wc:'Repérage',salle:'Explication des réservations',parking:'Brief sécurité',reception:'Repérage de l’accueil'};
+const visitStopDetails={start:'Présentation du parcours',commercial:'Présentations',compta:'Échange avec Adèle',finance:'Calcul de marge',direction:'Discussion',maya:'Échange et question SAV',info:'Présentation à Séverine',rh:'Remise du badge et des documents déjà prévue',wc:'Repérage',salle:'Explication des réservations',parking:'Brief sécurité',reception:'Passage à l’accueil'};
 function visitRowTiming(row){
  const depart=row.depart??row.start;
  const range=visitClock(depart)+(visitClock(depart)===visitClock(row.end)?'':' – '+visitClock(row.end));
- if(row.failed)return range+' · '+row.message;
+ if(row.failed)return range+' · '+row.message+' · +'+visitDuration(row.delay)+' pour la tentative';
  const duration=Math.round(row.end)-Math.round(depart);
  if(row.id==='end'){
   return range+(duration?' · '+visitDuration(duration)+' de trajet':'')+' · Café avec l’équipe';
  }
  const activity=visitStopDetails[row.id]||'Temps prévu';
- const parts=[activity,row.id==='parking'&&row.travel?'Marche jusqu’au parking : '+visitDuration(row.travel):'',row.wait?'Attente : '+visitDuration(row.wait):''].filter(Boolean);
+ const parts=[activity,row.id==='parking'&&row.travel?'Marche jusqu’au parking : '+visitDuration(row.travel):'',row.wait?'Attente : '+visitDuration(row.wait):'',row.delay?visitStops[row.id].delayReason+' : +'+visitDuration(row.delay):''].filter(Boolean);
  return range+' · '+visitDuration(duration)+' au total · '+parts.join(' · ');
 }
 function visitUpdateLedger(){
@@ -1691,8 +1693,9 @@ function visitConnect(id,points){
  if(arrival<(stop.from||0)||stop.until&&arrival+stop.d>stop.until){
    const when=arrival<(stop.from||0);
    const message=when&&id==='info'?'Séverine n’est pas encore arrivée, repasse plus tard.':when&&id==='maya'?'Maya n’est pas disponible avant 9 h 50.':id==='compta'?'Adèle doit rejoindre Cynthia à 10 h.':'Sandrine a une réunion à 10 h 15 : prévois 5 min avec elle et un passage plus tôt.';
-   visitError=message+' Tu as perdu 2 min.';
-   visitFailures.push({id,after:from,message:visitError,tooEarly:when});visitGhosts.push(edge);
+   const delay=2;
+   visitError=message+' Tu as perdu '+delay+' min.';
+   visitFailures.push({id,after:from,message,delay,tooEarly:when});visitGhosts.push(edge);
    $('visitResult').replaceChildren();visitStatus('Repars du dernier arrêt confirmé.');visitRedraw();return;
  }
  visitLines.push(edge);
@@ -1895,10 +1898,21 @@ function visitTimingFeedback(end){
 function visitPersonalComments(result){
  const reached=new Set(result.rows.filter(row=>!row.failed).map(row=>row.id));
  const comments=[];
+ for(const row of result.rows){
+  if(row.failed&&!(row.id==='maya'&&row.tooEarly)){
+   comments.push('Tentative à l’arrêt « '+visitStops[row.id].label+' » : '+row.message+' Temps ajouté : '+visitDuration(row.delay)+'.');
+  }else if(!row.failed&&row.id==='reception'){
+   comments.push('En repassant à l’accueil, tu as croisé Thierry. L’échange a ajouté '+visitDuration(row.delay)+'. Tu peux garder ce café pour plus tard.');
+  }else if(!row.failed&&row.id==='rh'){
+   comments.push('Le détour par les RH a ajouté '+visitDuration(row.delay)+'. La remise du badge et des documents était déjà organisée : tu peux éviter ce détour.');
+  }
+ }
  if(result.rows.some(row=>row.failed&&row.id==='maya'&&row.tooEarly)){
   comments.push(reached.has('maya')
    ? 'Ton premier passage aux Achats était trop tôt : Maya est disponible à partir de 9 h 50. En repassant plus tard, tu as pu échanger avec elle.'
    : 'Tu es passé aux Achats avant que Maya soit disponible. Prévois cet échange à partir de 9 h 50.');
+  const lost=result.rows.filter(row=>row.failed&&row.id==='maya'&&row.tooEarly).reduce((sum,row)=>sum+row.delay,0);
+  comments.push('Temps ajouté pour '+(lost>2?'ces tentatives':'cette tentative')+' aux Achats : '+visitDuration(lost)+'.');
  }
  if(!result.issues.length&&reached.has('wc')){
   comments.push('Tu as couvert les étapes indispensables et montré où se trouvent les sanitaires. C’est un repère utile pour qu’Adrien puisse s’orienter seul dès son premier jour.');
@@ -1954,7 +1968,7 @@ $('visitConfirm').onclick=()=>{
  $('hint').textContent='Page 3 · Parcours reporté sur le plan. Tu peux maintenant finaliser le défi.';
  render();$('finishVisit').focus();
 };
-const referenceVisit=['start','direction','parking','finance','maya','end'];
+const referenceVisit=['start','direction','parking','maya','finance','end'];
 function visitComparisonCard(title,result,edges,key){
  const card=document.createElement('section'),heading=document.createElement('h3');
  heading.textContent=title;card.append(heading);
