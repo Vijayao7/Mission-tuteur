@@ -801,7 +801,7 @@ function noteReturns(o){
  return isNote(o)&&o.slot?.kind==='tucked'&&o.slot.stage===stage&&o.slot.side===direction;
 }
 function facingCoverNote(o,at,coverSide){
- return {...o,x:2*X-o.x-o.w*Math.cos(o.r),y:o.y+o.w*Math.sin(o.r),r:-o.r,verso:true,
+ return {...o,x:2*X-o.x-o.w*Math.cos(o.r),y:o.y+o.w*Math.sin(o.r),r:-o.r,verso:!o.verso,
   slot:{kind:'insert',stage:at,side:-coverSide}};
 }
 function returnedNote(o){
