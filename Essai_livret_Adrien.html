@@ -710,11 +710,11 @@ const visitNoteText=[
  [
   ["","J’ai vérifié le bureau d’Adrien mercredi. Séverine m’a confirmé que les accès fonctionnent (mail, CRM…). RDV prévu à {11 h}, mais elle aimerait mettre un visage sur son prénom avant. Si on peut, passer la saluer : {2 min max}."],
   ["side-ink","↳ Séverine a appelé ce matin : elle n’arrive qu’à {9 h 50}, elle dépose sa fille au lycée."],
-  ["","RH : la remise du badge et des documents est déjà prévue. ~~Refaire la visite du service~~ → si on y passe, compter {3 min de retard}."],
+  ["","RH : les badges et les documents ont déjà été remis. ~~Refaire la visite du service~~ → si on y passe, compter {3 min de retard}."],
   ["","Salle de réunion : appel client de {9 h 30 à 10 h 30}. ~~Entrer~~ La montrer de l’extérieur et expliquer les réservations. Compter {2 min}."],
   ["","Gaëtan a appelé à {7 h 30} : grosse livraison pour Pachard + inventaire. ~~Visiter l’entrepôt~~. Il est bloqué au dépôt et me demande de faire le brief sécurité : parking, {point de rassemblement}, etc. Prévoir {au moins 15 min en tout} pour les points sécurité."],
   ["","Riyad veut me voir lundi 7 septembre pour mon calcul de marge chez un client. Il doit faire son rapport à Séverine le matin. Avec lui, ça file : {5 min max} à son bureau."],
-  ["side-ink","~~Café avec Thierry~~ On ira le voir plus tard avec Adrien. Si on repasse à l’accueil, Thierry risque de nous raconter ses anecdotes : {10 min de retard} !"]
+  ["side-ink","~~Café avec Thierry~~ On ira le voir plus tard avec Adrien. Si on repasse à l’accueil, Thierry risque de nous raconter ses anecdotes : {au moins 10 min de retard} !"]
  ]
 ];
 function makeNotePaper(i){
@@ -773,11 +773,6 @@ function hit(o,x,y){const dx=x-o.x,dy=y-o.y,u=dx*Math.cos(o.r)+dy*Math.sin(o.r),
 function bookBounds(){
  return {left:stage===0?X:X-W,right:stage===5?X:X+W};
 }
-function underFirstLeaf(o){
- const slot=o.slot;
- return slot?.kind==='insert'&&(slot.stage===1&&slot.side===-1||slot.stage===2&&slot.side===1);
-}
-function coveredByFirstLeaf(o){return underFirstLeaf(o)&&o.slot.stage!==stage;}
 function documentTabOnly(o){return o.slot?.kind==='insert'&&o.slot.stage!==stage;}
 function documentShift(o){
  if(o.slot?.kind!=='insert')return 0;
@@ -791,7 +786,7 @@ function documentTabBounds(o){
  return {x:side<0?edge-38:edge,y:Y,w:38,h:H};
 }
 function documentHit(o,x,y){
- if(coveredByFirstLeaf(o))return false;
+ if(o.slot?.kind==='tucked')return false;
  if(documentTabOnly(o)){
   const t=documentTabBounds(o);
   if(x<t.x||x>t.x+t.w||y<t.y||y>t.y+t.h)return false;
@@ -800,49 +795,52 @@ function documentHit(o,x,y){
 }
 function isNote(o){return o.id==='note'||o.id==='note2';}
 function noteRides(o){
- return isNote(o)&&o.slot?.kind==='insert'&&o.slot.stage===stage&&o.slot.side===direction&&stage+direction>0&&stage+direction<5;
+ return isNote(o)&&o.slot?.kind==='insert'&&o.slot.stage===stage&&o.slot.side===direction&&stage+direction>=0&&stage+direction<=5;
 }
-function turnsFirstLeaf(){return stage===1&&direction===1||stage===2&&direction===-1;}
+function noteReturns(o){
+ return isNote(o)&&o.slot?.kind==='tucked'&&o.slot.stage===stage&&o.slot.side===direction;
+}
+function facingCoverNote(o,at,coverSide){
+ return {...o,x:2*X-o.x-o.w*Math.cos(o.r),y:o.y+o.w*Math.sin(o.r),r:-o.r,verso:true,
+  slot:{kind:'insert',stage:at,side:-coverSide}};
+}
+function returnedNote(o){
+ if(o.slot.coverOrigin)return facingCoverNote(o,o.slot.coverOrigin.stage,o.slot.coverOrigin.side);
+ return {...o,x:2*X-o.x-o.w*Math.cos(o.r),y:o.y+o.w*Math.sin(o.r),r:-o.r,verso:!o.verso,
+  slot:{kind:'insert',stage:stage+direction,side:direction}};
+}
 function landTurningNotes(){
- for(const o of props)if(noteRides(o)){
-  o.x=2*X-o.x-o.w*Math.cos(o.r);o.y+=o.w*Math.sin(o.r);o.r=-o.r;o.verso=!o.verso;
-  if(turnsFirstLeaf()){
-   // Leave the note on the surface underneath, not on the back of the leaf.
-   o.slot={kind:'insert',stage,side:-direction};
-   const left=direction>0?X-W:X,right=left+W;
-   const c=Math.cos(o.r),sn=Math.sin(o.r);
-   const dx=[0,o.w*c,-o.h*sn,o.w*c-o.h*sn],dy=[0,o.w*sn,o.h*c,o.w*sn+o.h*c];
-   o.x=Math.max(left+8-Math.min(...dx),Math.min(right-8-Math.max(...dx),o.x));
-   o.y=Math.max(Y+8-Math.min(...dy),Math.min(Y+H-8-Math.max(...dy),o.y));
-  }else o.slot={kind:'insert',stage:stage+direction,side:-direction};
+ const returning=props.filter(noteReturns);
+ const carried=props.filter(noteRides);
+ for(const o of carried){
+  const origin=o.slot;
+  o.slot={kind:'tucked',stage:stage+direction,side:-direction};
+  if(stage+direction===0||stage+direction===5)o.slot.coverOrigin={stage:origin.stage,side:origin.side};
  }
+ for(const o of returning)Object.assign(o,returnedNote(o));
+ for(const o of returning)props.splice(props.indexOf(o),1);
+ props.push(...returning.reverse());
 }
-// Draw the note in the very same strip (and relief row) as its supporting
-// paper. Paint each strip before the next one can cover it at the fold.
-function drawNoteStrip(notes,j,count,row,rows,back,height){
- if(!notes.length)return;
- const step=W/count, side=back?-1:1, originalSide=notes[0].slot.side;
- const u0=j*step;
- const out= j===count-1 ? 64/step : 0;
- const flipped=side!==originalSide;
- if(flipped&&turnsFirstLeaf()&&notes.some(noteRides))return;
- const rowY=row*H/rows, rowH=H/rows;
- ctx.save();
- ctx.beginPath();
- ctx.rect(back?-out:0,0,1+out,height);
- ctx.clip();
- // Convert from the coordinates of the original flat spread to this strip.
- ctx.translate(back?1:0,0);
- ctx.scale(side*originalSide/step,height/rowH);
- ctx.translate(-X-originalSide*u0,-Y-rowY);
- for(const o of notes){
-  ctx.save();ctx.translate(o.x,o.y);ctx.rotate(o.r);
-  if(flipped){ctx.translate(o.w,0);ctx.scale(-1,1);}
-  if(flipped!==!!o.verso){ctx.fillStyle='#f5efdf';ctx.fillRect(0,0,o.w,o.h);}
-  else img(ctx,o.asset,0,0,o.w,o.h);
-  ctx.restore();
+// Bake the paper and its notes into an opaque face before bending it.
+function bookFaceWithNotes(face,notes,side){
+ if(!notes.length)return face;
+ const q=face.width/W;
+ const surface=document.createElement('canvas');
+ surface.width=face.width;surface.height=face.height;
+ const g=surface.getContext('2d');
+ g.fillStyle='#fffefa';g.fillRect(0,0,surface.width,surface.height);g.drawImage(face,0,0);
+ g.scale(q,face.height/H);
+ g.translate(side<0?W-X:-X,-Y);
+ const flipped=side!==notes[0].slot.side;
+ for(const o of flipped?[...notes].reverse():notes){
+  const x=flipped?2*X-o.x-o.w*Math.cos(o.r):o.x;
+  const y=flipped?o.y+o.w*Math.sin(o.r):o.y;
+  g.save();g.translate(x,y);g.rotate(flipped?-o.r:o.r);
+  g.fillStyle='#f5efdf';g.fillRect(0,0,o.w,o.h);
+  if(flipped===!!o.verso)img(g,o.asset,0,0,o.w,o.h);
+  g.restore();
  }
- ctx.restore();
+ return surface;
 }
 function drawDeskDocument(o,uncovered=false){
  const tab=!uncovered&&documentTabOnly(o),x=o.x+documentShift(o);
@@ -862,13 +860,14 @@ function placeDocument(o,x,y){
  const {left,right}=bookBounds();
  const edge=o.slot?.kind==='insert'?0:28;
  const inside=x>=left-edge&&x<=right+edge&&y>=Y-edge&&y<=Y+H+edge;
- if(isNote(o)&&inside&&stage>0&&stage<5){
-  const side=x<X?-1:1,c=Math.cos(o.r),sn=Math.sin(o.r);
+ if(isNote(o)&&inside){
+  const side=stage===0?1:stage===5?-1:x<X?-1:1,c=Math.cos(o.r),sn=Math.sin(o.r);
   o.slot={kind:'insert',stage,side};
-  // Leave a small corner outside the book so the sheet can be retrieved.
-  const xs=[0,o.w*c,-o.h*sn,o.w*c-o.h*sn];
-  o.x=side<0?left-Math.min(...xs)-38:right-Math.max(...xs)+38;
-  o.y=Math.max(Y+12,Math.min(Y+H-72,o.y));
+  // Keep the whole note on the leaf, at the position where it was dropped.
+  const xs=[0,o.w*c,-o.h*sn,o.w*c-o.h*sn],ys=[0,o.w*sn,o.h*c,o.w*sn+o.h*c];
+  const pageLeft=side<0?left:X,pageRight=side<0?X:right;
+  o.x=Math.max(pageLeft+6-Math.min(...xs),Math.min(pageRight-6-Math.max(...xs),o.x));
+  o.y=Math.max(Y+6-Math.min(...ys),Math.min(Y+H-6-Math.max(...ys),o.y));
  }else{
   const overlap=o.x<right&&o.x+o.w>left&&o.y<Y+H&&o.y+o.h>Y;
   o.slot=overlap&&o.slot?.kind!=='insert'?{kind:'under'}:null;
@@ -1106,10 +1105,13 @@ function limitSolidMove(kind,from,to){
  }
  return last;
 }
-function drawBookLeaf(m,faceAt,coverTurn,notes=[]){
+function drawBookLeaf(m,faceAt,coverTurn,notes=[],noteFace=0,reverseNotes=[]){
  const count=m.length-1;
- for(let j=0;j<count;j++){
-  const a=m[j],b=m[j+1],back=b[0]<a[0],left=back?b:a,right=back?a:b,face=faceAt(back);
+ const faces=[false,true].map(back=>{const face=faceAt(back);const side=back?-1:1;return face&&bookFaceWithNotes(face,noteFace&&noteFace!==side?reverseNotes:notes,side);});
+ // The curl can overlap itself: paint distant strips before nearer ones.
+ const order=Array.from({length:count},(_,i)=>i).sort((a,b)=>(m[a][4]+m[a+1][4])-(m[b][4]+m[b+1][4]));
+ for(const j of order){
+  const a=m[j],b=m[j+1],back=b[0]<a[0],left=back?b:a,right=back?a:b,face=faces[Number(back)];
   if(!face)continue;
   const sw=face.width/count,dw=Math.max(.05,right[0]-left[0]),dh=(a[2]+b[2])/2;
   if(m.relief){
@@ -1120,13 +1122,13 @@ function drawBookLeaf(m,faceAt,coverTurn,notes=[]){
     ctx.save();ctx.transform(dw+.45,yr-y,0,1,left[0],y);
     ctx.drawImage(face,(back?count-1-j:j)*sw,row*sh,sw,sh,0,0,1,height+.35);
     ctx.fillStyle='rgba(67,48,34,'+Math.min(.25,.06+Math.abs(r[row]-l[row])*.2)+')';
-    ctx.fillRect(0,0,1,height+.35);drawNoteStrip(notes,j,count,row,8,back,height);ctx.restore();
+    ctx.fillRect(0,0,1,height+.35);ctx.restore();
    }
    continue;
   }
   ctx.save();ctx.transform(dw+.45,right[1]-left[1],0,1,left[0],left[1]);
   ctx.drawImage(face,(back?count-1-j:j)*sw,0,sw,face.height,0,0,1,dh);
-  ctx.fillStyle='rgba(67,48,34,'+((coverTurn?.18:.24)*(1-Math.abs(Math.cos(a[3]))))+')';ctx.fillRect(0,0,1,dh);drawNoteStrip(notes,j,count,0,1,back,dh);ctx.restore();
+  ctx.fillStyle='rgba(67,48,34,'+((coverTurn?.18:.24)*(1-Math.abs(Math.cos(a[3]))))+')';ctx.fillRect(0,0,1,dh);ctx.restore();
  }
 }
 function drawCoverEdge(m){
@@ -1139,10 +1141,10 @@ function drawCoverEdge(m){
 function render(){let w=c.clientWidth,h=c.clientHeight;if(!w||!h)return;const d=Math.min(close?Math.max(devicePixelRatio||1,2):devicePixelRatio||1,3,Math.sqrt(12e6/(w*h)));if(c.width!==Math.round(w*d)||c.height!==Math.round(h*d)){c.width=Math.round(w*d);c.height=Math.round(h*d)}ctx.setTransform(d,0,0,d,0,0);ctx.fillStyle='#785234';ctx.fillRect(0,0,w,h);const i=assets.wood;if(i.naturalWidth){let q=Math.max(w/i.width,h/i.height);ctx.drawImage(i,(w-i.width*q)/2,(h-i.height*q)/2,i.width*q,i.height*q)}
 scale=close?Math.min(w/645,h/540):Math.min(w/1540,h/860);tx=w/2-(close?650:770)*scale;ty=h/2-(close?402:420)*scale;ctx.translate(tx,ty);ctx.scale(scale,scale);
 if($('deskPot').childElementCount)positionDeskPot();
-for(const o of props)if(o!==held?.o&&o.id!=='mug'&&o.slot?.kind!=='insert')drawDeskDocument(o);
+for(const o of props)if(o!==held?.o&&o.id!=='mug'&&o.slot?.kind!=='insert'&&o.slot?.kind!=='tucked')drawDeskDocument(o);
 const mug=props.find(o=>o.id==='mug'),mx=mug.x+107,my=mug.y+81;
 const active=p>0&&p<1,next=stage+direction;
-for(const o of props)if(o!==held?.o&&documentTabOnly(o)&&!coveredByFirstLeaf(o))drawDeskDocument(o);
+for(const o of props)if(o!==held?.o&&documentTabOnly(o))drawDeskDocument(o);
 const pageLeft=s=>s===0?null:s===1?inside:s===5?backCover:P[(s-1)*2-1];
 const pageRight=s=>s===0?cover:s===4?inside:s===5?null:P[(s-1)*2];
 let l=active&&direction<0?pageLeft(next):pageLeft(stage),rr=active&&direction>0?pageRight(next):pageRight(stage);
@@ -1205,7 +1207,7 @@ if(paintPot&&showPot){
  item(deskPotPhoto,deskPotPosition.x+(145-width)/2,deskPotPosition.y-(grip?.lift??0),width,145,grip?grip.tilt*Math.PI/180:0);
 }
 Object.assign($('steam').style,{left:(tx+mx*scale)+'px',top:(ty+my*scale)+'px',width:(87*scale)+'px',height:(109*scale)+'px',visibility:showMug&&assets.mug.naturalWidth&&!mugUnder?'visible':'hidden'});
-const notesOnSide=side=>props.filter(o=>o!==held?.o&&isNote(o)&&o.slot?.kind==='insert'&&o.slot.stage===stage&&o.slot.side===side&&!(active&&noteRides(o)));
+const notesOnSide=(side,at=stage)=>props.filter(o=>o!==held?.o&&isNote(o)&&o.slot?.kind==='insert'&&o.slot.stage===at&&o.slot.side===side&&!(active&&noteRides(o)));
 const meshedNotes=new Set();
 for(const rest of fixedCovers){
  const m=restingMesh(rest,true),face=rest.side<0?l:rr;
@@ -1232,7 +1234,7 @@ if(stackVisible&&!fixedCovers.some(r=>r.side===raisedSide)){
   }
  }else{
   if(raisedCover)drawCoverEdge(m);
-  const notes=notesOnSide(raisedSide);notes.forEach(o=>meshedNotes.add(o));
+  const notes=notesOnSide(raisedSide,displayStage);notes.forEach(o=>meshedNotes.add(o));
   drawBookLeaf(m,()=>raisedFace,raisedCover,notes);
  }
 }
@@ -1244,14 +1246,16 @@ if(active){
  const curl=Math.sin(Math.PI*p),roll=.34+direction*(.27*curl+.13*p),gx=last[0]+2,gy=last[1]+last[2]+(m.relief?.at(-1)?.[8]??0)+2;
  const release=Math.max(0,(p-.86)/.14),retreat=release*release*(3-2*release);
  ctx.save();ctx.globalAlpha=.12*curl;ctx.fillStyle='#312719';ctx.fillRect(Math.min(X,last[0]),Y+8,Math.abs(last[0]-X),H);ctx.restore();
- if(turnsFirstLeaf()){
-  // Reveal notes on the lower surface as the first leaf lifts away.
+ {
+  // Reveal notes already resting on the next exposed page.
   ctx.save();ctx.beginPath();ctx.rect(direction<0?X-W:X,Y,W,H);ctx.clip();
-  for(const o of props)if(o!==held?.o&&underFirstLeaf(o)&&o.slot.stage===next&&o.slot.side===direction)drawDeskDocument(o,true);
+  for(const o of notesOnSide(direction,next))if(!meshedNotes.has(o))drawDeskDocument(o,true);
+  for(const o of props.filter(noteReturns).reverse())drawDeskDocument(returnedNote(o),true);
   ctx.restore();
  }
+ const carriedNotes=props.filter(o=>o!==held?.o&&noteRides(o));
  if(coverTurn)drawCoverEdge(m);
- drawBookLeaf(m,back=>direction>0?(back?pageLeft(next):pageRight(stage)):(back?pageLeft(stage):pageRight(next)),coverTurn,props.filter(o=>o!==held?.o&&noteRides(o)));
+ drawBookLeaf(m,back=>direction>0?(back?pageLeft(next):pageRight(stage)):(back?pageLeft(stage):pageRight(next)),coverTurn,carriedNotes,direction);
  ctx.save();ctx.globalAlpha=1-retreat;drawGrip(pageArm,gx+direction*12*retreat,gy+48*retreat,roll+.16*retreat,267,.033,.245);ctx.restore();
 }
 if(held){
@@ -1347,7 +1351,7 @@ const visitStops={
  maya:{label:'Maya · achats et question SAV',short:'Achats',x:522,y:202,d:10,from:590},
  reception:{label:'Accueil · Thierry',short:'Accueil',x:222,y:320,d:0,delay:10,delayReason:'Échange imprévu avec Thierry'},
  info:{label:'Séverine · service informatique',short:'Informatique',x:522,y:152,d:2,from:590,maxWithWalk:5},
- rh:{label:'RH · détour',short:'RH',x:531,y:303,d:0,delay:3,delayReason:'Détour administratif'},
+ rh:{label:'RH · détour',short:'RH',x:531,y:303,d:0,delay:3,delayReason:'Présentation d’Adrien à Mathilde'},
  wc:{label:'Sanitaires · repère extérieur',short:'Sanitaires',x:129,y:246,d:1},
  salle:{label:'Salle de réunion · depuis le couloir',short:'Salle réunion',x:445,y:282,d:2},
  parking:{label:'Parking · point de rassemblement',short:'Rassemblement',x:59,y:91,d:0,minTotal:15},
@@ -1437,21 +1441,24 @@ function visitKeepManual(from,to,points){
  }
  return {path:route,adjusted:true};
 }
-// Estimate walking from the accepted path, in 15-second steps.
-function visitTravel(a,b,path=visitWalkingPath(a,b)){
+// Les minutages des notes couvrent l’étape entière.
+const visitTimedStops=new Set(['commercial','finance','direction','maya','reception','info','rh','wc','salle','parking']);
+function visitTravel(a,b){
+ if(visitTimedStops.has(b))return 0;
  if(b==='end'){
   if(a==='parking')return 3;
   return ['rh','info','maya','direction'].includes(a)?1:0;
  }
- if(a==='parking'&&b==='salle')return 3;
+ if(a==='parking')return 2;
+ const path=visitWalkingPath(a,b);
  let length=0;
  for(let i=1;i<path.length;i++)length+=Math.hypot(path[i].x-path[i-1].x,path[i].y-path[i-1].y);
- return Math.round(length/187.5)/4;
+ return length<250?0:Math.min(.5,Math.round(length/187.5)/4);
 }
-function evaluateVisit(ids,failures=[],legs=[]){
+function evaluateVisit(ids,failures=[]){
  let t=580;const rows=[],issues=[];
  for(let i=0;i<ids.length;i++){
-  const id=ids[i],stop=visitStops[id];const depart=t,travel=i?visitTravel(ids[i-1],id,legs[i-1]?.points):0;t+=travel;
+  const id=ids[i],stop=visitStops[id];const depart=t,travel=i?visitTravel(ids[i-1],id):0;t+=travel;
   const wait=Math.max(0,(stop.from||0)-t);t+=wait;const start=t;
   const delay=stop.delay||0;
   t+=Math.max(stop.d,(stop.minTotal||0)-travel)+delay;
@@ -1607,7 +1614,7 @@ function setupPencilPot(id,desk){
   };pot.append(b);
  }
 }
-const visitStopDetails={start:'Présentation du parcours',commercial:'Présentations',compta:'Échange avec Adèle',finance:'Calcul de marge',direction:'Discussion',maya:'Échange et question SAV',info:'Présentation à Séverine',rh:'Remise du badge et des documents déjà prévue',wc:'Repérage',salle:'Explication des réservations',parking:'Brief sécurité',reception:'Passage à l’accueil'};
+const visitStopDetails={start:'Présentation du parcours',commercial:'Présentations',compta:'Échange avec Adèle',finance:'Calcul de marge',direction:'Discussion',maya:'Échange et question SAV',info:'Présentation à Séverine',wc:'Repérage',salle:'Explication des réservations',parking:'Brief sécurité',reception:'Passage à l’accueil'};
 function visitRowTiming(row){
  const depart=row.depart??row.start;
  const range=visitClock(depart)+(visitClock(depart)===visitClock(row.end)?'':' – '+visitClock(row.end));
@@ -1616,15 +1623,16 @@ function visitRowTiming(row){
  if(row.id==='end'){
   return range+(duration?' · '+visitDuration(duration)+' de trajet':'')+' · Café avec l’équipe';
  }
+ if(row.id==='rh')return range+' · Les badges et les documents ont déjà été remis. Tu présentes Adrien à Mathilde : +'+visitDuration(row.delay)+'.';
  const activity=visitStopDetails[row.id]||'Temps prévu';
- const parts=[activity,row.id==='parking'&&row.travel?'Marche jusqu’au parking : '+visitDuration(row.travel):'',row.wait?'Attente : '+visitDuration(row.wait):'',row.delay?visitStops[row.id].delayReason+' : +'+visitDuration(row.delay):''].filter(Boolean);
+ const parts=[activity,row.wait?'Attente : '+visitDuration(row.wait):'',row.delay?visitStops[row.id].delayReason+' : +'+visitDuration(row.delay):''].filter(Boolean);
  return range+' · '+visitDuration(duration)+' au total · '+parts.join(' · ');
 }
 function visitUpdateLedger(){
  const inkLabel=$('visitInkLabel'),toolName=visitMode==='erase'?'Gomme sélectionnée':'Crayon '+visitInk.name;
  if(inkLabel.textContent!==toolName)inkLabel.textContent=toolName;
  for(const b of document.querySelectorAll('#deskPot [data-ink],#visitTools [data-ink]'))b.setAttribute('aria-pressed',visitMode==='pen'&&b.dataset.ink===visitInk.name);
- const r=evaluateVisit(visitRoute(),visitFailures,visitLines),list=$('visitLive'),alert=$('visitError');
+ const r=evaluateVisit(visitRoute(),visitFailures),list=$('visitLive'),alert=$('visitError');
  alert.hidden=!visitError;alert.textContent=visitError;
  $('visitLiveTime').textContent=visitClock(r.end)+' · '+visitDuration(r.end-580)+' / 35 min';
  const rows=r.rows.map(row=>[
@@ -1681,9 +1689,9 @@ function visitRedraw(){
 function visitConnect(id,points){
  if(visitCurrent()==='end'){visitStatus('La salle de pause termine la visite. Efface le dernier trait pour la modifier.');return}
  if(visitRoute().includes(id)){visitStatus('Cet arrêt figure déjà sur ton parcours.');return}
- const from=visitCurrent(), stop=visitStops[id], now=evaluateVisit(visitRoute(),visitFailures,visitLines).end;
+ const from=visitCurrent(), stop=visitStops[id], now=evaluateVisit(visitRoute(),visitFailures).end;
  const {path,adjusted}=points?visitKeepManual(from,id,points):{path:visitWalkingPath(from,id)};
- const arrival=now+visitTravel(from,id,path);
+ const arrival=now+visitTravel(from,id);
  const edge={from,to:id,points:path,color:visitInk.color,samples:sampleVisitEdge(path)};
  visitError='';
  if(stop.maxWithWalk&&arrival-now+stop.d>stop.maxWithWalk){
@@ -1904,7 +1912,7 @@ function visitPersonalComments(result){
   }else if(!row.failed&&row.id==='reception'){
    comments.push('En repassant à l’accueil, tu as croisé Thierry. L’échange a ajouté '+visitDuration(row.delay)+'. Tu peux garder ce café pour plus tard.');
   }else if(!row.failed&&row.id==='rh'){
-   comments.push('Le détour par les RH a ajouté '+visitDuration(row.delay)+'. La remise du badge et des documents était déjà organisée : tu peux éviter ce détour.');
+   comments.push('Le détour par les RH a ajouté '+visitDuration(row.delay)+'. Les badges et les documents avaient déjà été remis. Tu en as profité pour présenter Adrien à Mathilde.');
   }
  }
  if(result.rows.some(row=>row.failed&&row.id==='maya'&&row.tooEarly)){
@@ -1926,7 +1934,7 @@ function appendVisitComments(container,result){
 }
 function showVisitResult(){
  if(!visitLines.length)return;
- const r=evaluateVisit(visitRoute(),visitFailures,visitLines);
+ const r=evaluateVisit(visitRoute(),visitFailures);
  feedbackBody.replaceChildren();
  const ready=!r.issues.length,arrived=visitCurrent()==='end',feedback=arrived?visitTimingFeedback(r.end):null;
  $('visitFeedbackTitle').textContent=!ready?'Parcours à modifier':feedback?.title||'Ta visite est en cours';
@@ -1952,14 +1960,14 @@ function showVisitResult(){
  visitFeedback.showModal();$('visitFeedbackTitle').focus();
 }
 $('visitRevise').onclick=()=>{
- if(visitCurrent()==='end'&&evaluateVisit(visitRoute(),visitFailures,visitLines).issues.length){
+ if(visitCurrent()==='end'&&evaluateVisit(visitRoute(),visitFailures).issues.length){
   visitEraseFrom(visitLines.length-1);
  }
  visitFeedback.close();
 };
 $('visitConfirm').onclick=()=>{
- if($('visitConfirm').hidden||evaluateVisit(visitRoute(),visitFailures,visitLines).issues.length)return;
- validatedVisitResult=evaluateVisit(visitRoute(),visitFailures,visitLines);
+ if($('visitConfirm').hidden||evaluateVisit(visitRoute(),visitFailures).issues.length)return;
+ validatedVisitResult=evaluateVisit(visitRoute(),visitFailures);
  validatedVisit=visitLines.map(({color,points})=>({color,points:points.map(({x,y})=>({x,y}))}));
  visitFeedback.close();$('visitGame').close();
  if(bookRestFrame)cancelAnimationFrame(bookRestFrame);
